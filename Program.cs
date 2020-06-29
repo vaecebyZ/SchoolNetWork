@@ -16,120 +16,133 @@ namespace dotnet
         static readonly string ListenHost = "www.bing.com.cn";
         static StreamReader sr;
         static StreamReader sfw;
-        static readonly string BanListFilePath = Path.GetFullPath(Environment.CurrentDirectory + "/Resources/BanList.data");
-        static readonly string filename = Path.GetFullPath(Environment.CurrentDirectory + "/Resources/UidPwd.data");
+        static readonly string BanListFilePath = Path.GetFullPath(Environment.CurrentDirectory + "/Resources/BanList.data");//黑名单路径
+        static readonly string filename = Path.GetFullPath(Environment.CurrentDirectory + "/Resources/UidPwd.data");//白名单路径
+        static Random rd = new Random();
         static void Main(string[] args)
         {
-            Console.WriteLine("==========WELCOME==============");
-            //http://172.16.0.2/drcom/login?callback=dr1003&DDDDD=20183170535%40cmcc&upass=05251196&0MKKey=123456&R1=0&R3=0&R6=0&para=00&v6ip=&v=7051
-            Listen(ListenHost);
+            Console.WriteLine("==============WELCOME==============");
+            Console.WriteLine("第一次运行检查是否连接校园网，和是否网络正常。");
+            Listen(ListenHost);//监听
         }
 
         private static void Listen(string ListenHost)//心跳
         {
-            Ping ping = new Ping();
-            PingReply pingReply = ping.Send(ListenHost);
-            StringBuilder sbuilder;
-            if (pingReply.Status == IPStatus.Success)
+            try
             {
-                sbuilder = new StringBuilder();
-                sbuilder.AppendLine(string.Format("延时: {0} ", pingReply.RoundtripTime));
-                sbuilder.AppendLine(string.Format("存活时间: {0} ", pingReply.Options.Ttl));
-                Console.WriteLine(sbuilder.ToString());
-                Thread.Sleep(3000);
-                Listen(ListenHost);
-            }
-            else if (pingReply.Status == IPStatus.TimedOut)
-            {
-
-                Console.WriteLine("超时");
-                Thread.Sleep(3000);
-                bool isSeame = false;
-                if (isFiretLoad)//首次加载
-                {               
-                    sr = File.OpenText(filename);//读取文件                   
-                    isFiretLoad = false;
-                }
-                sfw = File.OpenText(BanListFilePath);
-                string nextline;
-                while ((nextline = sr.ReadLine()) != null)//读取一排数据
+                Ping ping = new Ping();
+                PingReply pingReply = ping.Send(ListenHost);
+                StringBuilder sbuilder;
+                if (pingReply.Status == IPStatus.Success)
                 {
-                    string banlist;
-
-                    while((banlist = sfw.ReadLine()) != null)
+                    sbuilder = new StringBuilder();
+                    sbuilder.AppendLine(string.Format("延时: {0} ", pingReply.RoundtripTime));
+                    sbuilder.AppendLine(string.Format("存活时间: {0} ", pingReply.Options.Ttl));
+                    Console.WriteLine(sbuilder.ToString());
+                    Thread.Sleep(3000);
+                    Listen(ListenHost);
+                }
+                else if (pingReply.Status == IPStatus.TimedOut)//超时
+                {
+                    Console.WriteLine("请求超时，正在重试");         
+                    int seed = rd.Next(1,200);//设置随机行数
+                    Thread.Sleep(2000);
+                    bool isSeame = false;
+                    if (isFiretLoad)//首次加载
                     {
-                        if(nextline == banlist)
-                        {
-                            Console.WriteLine("该账号存在与黑名单中:"+nextline);
-                            isSeame = true;
-                            break;
-                        }
-   
+                        sr = File.OpenText(filename);//读取文件                   
+                        isFiretLoad = false;
                     }
-                    if (isSeame)
+                    sfw = File.OpenText(BanListFilePath);
+                    string nextline;
+                    int i = 0;
+                    while ((nextline = sr.ReadLine()) != null)//读取一排数据
                     {
-                        isSeame = false;
+                        i++;
+                        if (i == seed)//读取随机中的行数
+                        {
+                            string banlist;
+
+                            while ((banlist = sfw.ReadLine()) != null)//查看黑名单
+                            {
+                                if (nextline == banlist)//对上黑名单
+                                {
+                                    Console.WriteLine("该账号存在与黑名单中:" + nextline);
+                                    isSeame = true;
+                                    break;
+                                }
+                            }
+                            if (isSeame)
+                            {
+                                seed = rd.Next(1,500);
+                                isSeame = false;
+                                continue;
+                            }
+                            sfw.Close();//关闭黑名单流
+                            Console.WriteLine("=====================");
+                            Console.WriteLine("正在尝试：");
+                            Console.WriteLine(nextline);
+                            Console.WriteLine();
+                            string[] str = nextline.Split(' ');//空格分开密码账号
+                            Login(str[0], str[1]);
+                        }
                         continue;
                     }
-                    sfw.Close();
-                    Console.WriteLine("=====================");
-                    Console.WriteLine("正在尝试：");
-                    Console.WriteLine(nextline);
-                    Console.WriteLine();
-                    string[] str = nextline.Split(' ');//空格分开密码账号
-                    Login(str[0], str[1]);
-                    //Console.WriteLine(str[0]);uid
-                    //Console.WriteLine(str[1]);pwd
-                }
-            }
-            else
-            {
-               Console.WriteLine("失败");
-            }
-        }
-
-        public static void Login(string uid, string pwd)
-        {
-            var client = new RestClient("http://172.16.0.2/drcom");//使用RestSharp实现
-            var request = new RestRequest(string.Format("login?callback=dr1003&DDDDD={0}%40cmcc&upass={1}&0MKKey=123456&R1=0&R3=0&R6=0&para=00&v6ip=&v=7051", uid, pwd), DataFormat.Json);
-            var response = client.Get(request);
-            var jcode = Regex.Replace(response.Content, @"(.*\()(.*)(\).*)", "$2"); //去掉小括号()
-            Console.WriteLine(jcode);
-            var result = JsonConvert.DeserializeObject<JObject>(jcode.ToString());
-            if (result["result"].ToString() == "1")
-            {
-                Console.WriteLine("登录成功");
-            }else if(result["result"].ToString() == "0")
-            {
-                Console.WriteLine("登录失败正在寻找原因");
-                if(result["msga"].ToString() == "inuse, login again")
-                {
-                    Console.WriteLine("===========================");
-                    Console.WriteLine("正确的账号信息,该账号将不会进入黑名单");
-                    Console.WriteLine(result["uid"].ToString());
                 }
                 else
                 {
-                    Console.WriteLine("用户名或者密码问题,该条记录会被加入黑名单");
-                    //using (var fileStream = new FileStream(filePath, FileMode.OpenOrCreate))
-                    //{
-                    //    string content = uid+" "+pwd+"\n";//向文本文件Demo.txt中写入的内容为"123456789"
-                    //    byte[] data = Encoding.ASCII.GetBytes(content);//使用ASCII码将字符串转换为字节数据，所以一个字符占用一个字节
-                    //    fileStream.Write(data, 0, data.Length);
-                    //}
-                    using (StreamWriter sw = new StreamWriter(BanListFilePath, true))
+                    Console.WriteLine("失败");
+                }
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("你多半是没连接CQCFE或者是没接上校园宽带？？？？？？"+ex.Message);
+                throw ex;
+            }
+           
+        }
+
+        public static void Login(string uid, string pwd)//登录方法
+        {
+            try
+            {
+                var client = new RestClient("http://172.16.0.2/drcom");//使用RestSharp实现
+                var request = new RestRequest(string.Format("login?callback=dr1003&DDDDD={0}%40cmcc&upass={1}&0MKKey=123456&R1=0&R3=0&R6=0&para=00&v6ip=&v=7051", uid, pwd), DataFormat.Json);
+                var response = client.Get(request);
+                var jcode = Regex.Replace(response.Content, @"(.*\()(.*)(\).*)", "$2"); //去掉小括号()
+                var result = JsonConvert.DeserializeObject<JObject>(jcode.ToString());
+                if (result["result"].ToString() == "1")//登录成功
+                {
+                    Console.WriteLine("登录成功");
+                }
+                else if (result["result"].ToString() == "0")//登录失败
+                {
+                    Console.WriteLine("登录失败正在寻找原因");
+                    if (result["msga"].ToString() == "inuse, login again")//重复登录
                     {
+                        Console.WriteLine("===========================");
+                        Console.WriteLine("正确的账号信息,该账号将不会进入黑名单");
+                        Console.WriteLine(result["uid"].ToString());
+                        Listen(ListenHost);
+                    }
+                    else//登录失败把ID加入黑名单
+                    {
+                        Console.WriteLine("用户名或者密码问题,该条记录会被加入黑名单");
+                        using StreamWriter sw = new StreamWriter(BanListFilePath, true);
                         string content = uid + " " + pwd;
                         sw.WriteLine(content);
+                        sw.Close();
+                        Listen(ListenHost);
                     }
                 }
+                Listen(ListenHost);
             }
-            else
+            catch (Exception)
             {
-                Console.WriteLine("致命的未知错误");
-                Console.ReadLine();
+                Console.WriteLine("出问题了哎");
             }
-            Listen(ListenHost);
+            
         }
     }
 }
