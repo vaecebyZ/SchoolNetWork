@@ -13,7 +13,7 @@ namespace dotnet
     class Program
     {
         static bool isFiretLoad = true;
-        static readonly string ListenHost = "www.bing.com.cn";
+        static readonly string ListenHost = "www.baidu.com";
         static StreamReader sr;
         static StreamReader sfw;
         static readonly string BanListFilePath = Path.GetFullPath(Environment.CurrentDirectory + "/Resources/BanList.data");//黑名单路径
@@ -39,14 +39,14 @@ namespace dotnet
                     sbuilder.AppendLine(string.Format("延时: {0} ", pingReply.RoundtripTime));
                     sbuilder.AppendLine(string.Format("存活时间: {0} ", pingReply.Options.Ttl));
                     Console.WriteLine(sbuilder.ToString());
-                    Thread.Sleep(3000);
+                    Thread.Sleep(4000);
                     Listen(ListenHost);
                 }
                 else if (pingReply.Status == IPStatus.TimedOut)//超时
                 {
-                    Console.WriteLine("请求超时，正在重试");         
-                    int seed = rd.Next(1,200);//设置随机行数
-                    Thread.Sleep(2000);
+                    Console.WriteLine("请求超时，正在重试");
+                    int seed = rd.Next(1, 200);//设置随机行数
+                    Thread.Sleep(3000);
                     bool isSeame = false;
                     if (isFiretLoad)//首次加载
                     {
@@ -74,7 +74,7 @@ namespace dotnet
                             }
                             if (isSeame)
                             {
-                                seed = rd.Next(1,500);
+                                seed = rd.Next(1, 500);
                                 isSeame = false;
                                 continue;
                             }
@@ -97,10 +97,10 @@ namespace dotnet
             }
             catch (Exception ex)
             {
-                Console.WriteLine("你多半是没连接CQCFE或者是没接上校园宽带？？？？？？"+ex.Message);
+                Console.WriteLine("你多半是没连接CQCFE或者是没接上校园宽带？？？？？？" + ex.Message);
                 throw ex;
             }
-           
+
         }
 
         public static void Login(string uid, string pwd)//登录方法
@@ -118,7 +118,7 @@ namespace dotnet
                 }
                 else if (result["result"].ToString() == "0")//登录失败
                 {
-                    Console.WriteLine("登录失败正在寻找原因");
+                    Console.WriteLine("登录失败正在寻找原因：");
                     if (result["msga"].ToString() == "inuse, login again")//重复登录
                     {
                         Console.WriteLine("===========================");
@@ -126,13 +126,32 @@ namespace dotnet
                         Console.WriteLine(result["uid"].ToString());
                         Listen(ListenHost);
                     }
-                    else//登录失败把ID加入黑名单
+                    else if (result["msga"].ToString() == "userid error1" || result["msga"].ToString() == "userid error2")//登录失败把ID加入黑名单
                     {
                         Console.WriteLine("用户名或者密码问题,该条记录会被加入黑名单");
                         using StreamWriter sw = new StreamWriter(BanListFilePath, true);
-                        string content = uid + " " + pwd;
+                        string content = uid + " " + pwd + " 账号密码错误:" + result["msga"].ToString();
                         sw.WriteLine(content);
                         sw.Close();
+                        Listen(ListenHost);
+                    }
+                    else
+                    {
+                        if (result["msga"].ToString() == "unbind isp uid")
+                        {
+                            Console.WriteLine("这条记录并未绑定网络。加入黑名单");
+                            using StreamWriter sw = new StreamWriter(BanListFilePath, true);
+                            string content = uid + " " + pwd + " 未绑定帐号";
+                            sw.WriteLine(content);
+                            sw.Close();
+                        }
+                        else
+                        {
+                            Console.WriteLine("原因： " + result["msga"].ToString());
+                            Console.WriteLine("意外情况这条记录暂时不会进入黑名单。");
+                        }
+
+
                         Listen(ListenHost);
                     }
                 }
@@ -140,9 +159,8 @@ namespace dotnet
             }
             catch (Exception)
             {
-                Console.WriteLine("出问题了哎");
+                Console.WriteLine("你他娘的真是个天才");
             }
-            
         }
     }
 }
