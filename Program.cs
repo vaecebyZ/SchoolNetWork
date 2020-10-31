@@ -157,9 +157,9 @@ namespace dotnet
                 }
                 Listen(ListenHost);
             }
-            catch (Exception)
+            catch (Exception e)
             {
-                Console.WriteLine("你他娘的真是个天才");
+                Console.WriteLine("未知错误:{0}",e);
             }
         }
     }
